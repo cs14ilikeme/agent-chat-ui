@@ -1,6 +1,6 @@
-# Agent Chat UI
+# GA-Go UI
 
-Agent Chat UI is a Next.js application which enables chatting with any LangGraph server with a `messages` key through a chat interface.
+GA-Go UI is a Next.js chat interface for the GA-Go backend. It can also connect to any LangGraph server with a `messages` key.
 
 > [!NOTE]
 > 🎥 Watch the video setup guide [here](https://youtu.be/lInrwVnZ83o).
@@ -40,12 +40,12 @@ The app will be available at `http://localhost:3000`.
 
 ## Usage
 
-Once the app is running (or if using the deployed site), you'll be prompted to enter:
+Once the app is running, you'll be prompted to enter:
 
-- **Deployment URL**: The URL of the LangGraph server you want to chat with. This can be a production or development URL.
-- **Assistant/Graph ID**: The name of the graph, or ID of the assistant to use when fetching, and submitting runs via the chat interface.
-- **LangSmith API Key**: (only required for connecting to deployed LangGraph servers) Your LangSmith API key to use when authenticating requests sent to LangGraph servers.
-- **Built with Agent Builder**: Toggle this on for Agent Builder deployments. This automatically sets the auth scheme to `langsmith-api-key`.
+- **Deployment URL**: The URL of the backend you want to chat with. For GA-Go, this is typically `http://localhost:8000`.
+- **Assistant/Graph ID**: Optional for GA-Go. For LangGraph, this is the name of the graph or ID of the assistant.
+- **Auth Token**: Your authentication token for the backend. For GA-Go, this is typically a Bearer token.
+- **Auth Scheme**: The authentication scheme. For GA-Go, this is typically `Bearer`. For LangGraph Agent Builder, this is `langsmith-api-key`.
 
 After entering these values, click `Continue`. You'll then be redirected to a chat interface where you can start chatting with your LangGraph server.
 
