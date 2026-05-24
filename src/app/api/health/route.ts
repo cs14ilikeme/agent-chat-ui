@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 /**
- * GET /api/health — 系统健康检查 + 告警
- * 检查: GA-Go API 连通性、内存使用、运行时间
+ * GET /api/health — Workbench health checks + alerts.
+ * Checks GA-Claw Hub connectivity, UI memory usage, and uptime.
  */
 
 interface HealthCheck {
@@ -13,18 +13,18 @@ interface HealthCheck {
   threshold?: number;
 }
 
-const GA_GO_API = process.env.GAGO_API_URL || "http://127.0.0.1:8765";
+const GA_CLAW_HUB_URL = process.env.GA_CLAW_HUB_URL || process.env.GAGO_API_URL || "http://127.0.0.1:8765";
 
-async function checkGaGoApi(): Promise<HealthCheck> {
+async function checkGaClawHub(): Promise<HealthCheck> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 5000);
-    const res = await fetch(`${GA_GO_API}/tasks?limit=1`, { signal: ctrl.signal });
+    const res = await fetch(`${GA_CLAW_HUB_URL}/api/v1/health`, { signal: ctrl.signal });
     clearTimeout(timer);
-    if (res.ok) return { name: "GA-Go API", status: "ok", message: "Connected" };
-    return { name: "GA-Go API", status: "warn", message: `HTTP ${res.status}` };
+    if (res.ok) return { name: "GA-Claw Hub", status: "ok", message: "Connected" };
+    return { name: "GA-Claw Hub", status: "warn", message: `HTTP ${res.status}` };
   } catch (e) {
-    return { name: "GA-Go API", status: "critical", message: `Unreachable: ${(e as Error).message}` };
+    return { name: "GA-Claw Hub", status: "critical", message: `Unreachable: ${(e as Error).message}` };
   }
 }
 
@@ -54,7 +54,7 @@ function checkUptime(): HealthCheck {
 
 export async function GET() {
   const checks = await Promise.all([
-    checkGaGoApi(),
+    checkGaClawHub(),
     Promise.resolve(checkMemory()),
     Promise.resolve(checkUptime()),
   ]);
