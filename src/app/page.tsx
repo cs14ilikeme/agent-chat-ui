@@ -2,7 +2,8 @@
 
 import React from "react";
 import Link from "next/link";
-import { Activity, Bot, CheckCircle2, CircleAlert, CircleDashed, Clock3, GitPullRequestArrow, Play, RefreshCw, RotateCcw, Server, ShieldCheck, SquareX, Trash2 } from "lucide-react";
+import { Activity, Bot, CheckCircle2, CircleAlert, CircleDashed, Clock3, GitPullRequestArrow, MessageSquare, Play, RefreshCw, RotateCcw, Send, Server, ShieldCheck, SquareX, Trash2 } from "lucide-react";
+import type { ApprovalItem, ArtifactItem, TimelineEvent, ToolLeaseItem, WorkspaceItem } from "@/lib/hub-types";
 
 import { ResultPreviewCard, TaskTimeline } from "@/components/task-detail-enhancements";
 import { TaskDagPanel } from "@/components/task-dag";
@@ -14,10 +15,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useTaskStream } from "@/hooks/use-task-stream";
-import { createGAGoClient } from "@/lib/gago-client";
-import { NodeState, TaskState, type HealthResponse, type Node, type Pairing, type Result, type Status, type Task, type TaskListResponse, type ManagedService, type TaskEvent, type TaskLogEntry } from "@/lib/gago-types";
+import { createGaClawClient } from "@/lib/hub-client";
+import { NodeState, TaskState, type CollabMessage, type CollabRoom, type HealthResponse, type Node, type Pairing, type Result, type Status, type Task, type TaskListResponse, type ManagedService, type TaskEvent, type TaskLogEntry, type RoomOverview } from "@/lib/hub-types";
 
-const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_GAGO_API_BASE_URL || "http://127.0.0.1:8765";
+function normalizeWorkbenchBaseUrl(value?: string): string {
+  if (!value) return "/api/hub";
+  const trimmed = value.trim();
+  if (/^[A-Za-z]:.*\/api\/(hub|gago)$/.test(trimmed)) return "/api/hub";
+  if (trimmed.endsWith("/api/gago")) return trimmed.replace(/\/api\/gago$/, "/api/hub");
+  return trimmed;
+}
+
+const DEFAULT_BASE_URL = normalizeWorkbenchBaseUrl(process.env.NEXT_PUBLIC_GAGO_API_BASE_URL);
 const DEFAULT_TOKEN = process.env.NEXT_PUBLIC_GAGO_AUTH_TOKEN || "";
 
 const stateTone: Record<string, string> = {
@@ -68,6 +77,13 @@ function safeJson(value: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+function formatHealthDescription(health: HealthResponse | null): string {
+  if (!health) return "Waiting for /health";
+  const parts = [health.service, health.version].filter(Boolean);
+  const label = parts.length > 0 ? parts.join(" ") : "GA-Claw Hub";
+  return health.time ? `${label} · ${health.time}` : label;
+}
+
 export default function GAGoDashboard(): React.ReactNode {
   const [baseUrl, setBaseUrl] = React.useState(DEFAULT_BASE_URL);
   const [token, setToken] = React.useState(DEFAULT_TOKEN);
@@ -77,6 +93,11 @@ export default function GAGoDashboard(): React.ReactNode {
   const [pairings, setPairings] = React.useState<Pairing[]>([]);
   const [metrics, setMetrics] = React.useState("");
   const [services, setServices] = React.useState<ManagedService[]>([]);
+  const [approvals, setApprovals] = React.useState<ApprovalItem[]>([]);
+  const [workspaces, setWorkspaces] = React.useState<WorkspaceItem[]>([]);
+  const [artifacts, setArtifacts] = React.useState<ArtifactItem[]>([]);
+  const [toolLeases, setToolLeases] = React.useState<ToolLeaseItem[]>([]);
+  const [timeline, setTimeline] = React.useState<TimelineEvent[]>([]);
   const [selectedServiceId, setSelectedServiceId] = React.useState<string | null>(null);
   const [serviceLogs, setServiceLogs] = React.useState<Record<string, string>>( {} );
   const [loading, setLoading] = React.useState(false);
@@ -97,20 +118,32 @@ export default function GAGoDashboard(): React.ReactNode {
   const [eventsLogsLoading, setEventsLogsLoading] = React.useState(false);
   const [taskFilterState, setTaskFilterState] = React.useState<string>("");
   const [taskFilterKeyword, setTaskFilterKeyword] = React.useState<string>("");
+  const [collabRooms, setCollabRooms] = React.useState<CollabRoom[]>([]);
+  const [selectedRoomId, setSelectedRoomId] = React.useState<string | null>(null);
+  const [collabMessages, setCollabMessages] = React.useState<CollabMessage[]>([]);
+  const [roomOverview, setRoomOverview] = React.useState<RoomOverview | null>(null);
+  const [roomCommandDraft, setRoomCommandDraft] = React.useState("comment.add");
+  const [collabDraft, setCollabDraft] = React.useState("");
+  const [collabLoading, setCollabLoading] = React.useState(false);
 
-  const client = React.useMemo(() => createGAGoClient({ baseUrl, token: token || null }), [baseUrl, token]);
+  const client = React.useMemo(() => createGaClawClient({ baseUrl, token: token || null }), [baseUrl, token]);
 
   const refresh = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [nextHealth, nextNodes, nextTasks, nextPairings, nextMetrics, nextServices] = await Promise.all([
+      const [nextHealth, nextNodes, nextTasks, nextPairings, nextMetrics, nextServices, nextApprovals, nextWorkspaces, nextArtifacts, nextToolLeases, nextTimeline] = await Promise.all([
         client.health(),
         client.listNodes(),
         client.listTasks(),
         client.listPairings(),
         client.getMetrics().catch(() => ""),
         client.listServices().catch(() => []),
+        client.listApprovals().catch(() => []),
+        client.listWorkspaces().catch(() => []),
+        client.listArtifacts().catch(() => []),
+        client.listToolLeases().catch(() => []),
+        client.listTimeline().catch(() => []),
       ]);
       setHealth(nextHealth);
       setNodes(nextNodes);
@@ -119,6 +152,11 @@ export default function GAGoDashboard(): React.ReactNode {
       setPairings(nextPairings);
       setMetrics(nextMetrics);
       setServices(nextServices);
+      setApprovals(nextApprovals);
+      setWorkspaces(nextWorkspaces);
+      setArtifacts(nextArtifacts);
+      setToolLeases(nextToolLeases);
+      setTimeline(nextTimeline);
       if (!selectedServiceId && nextServices.length > 0) setSelectedServiceId(nextServices[0].id);
       setNotice(`Refreshed ${new Date().toLocaleTimeString()}`);
     } catch (err) {
@@ -131,6 +169,64 @@ export default function GAGoDashboard(): React.ReactNode {
   React.useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const loadCollabRooms = React.useCallback(async (taskId?: string | null) => {
+    setCollabLoading(true);
+    try {
+      const data = await client.listCollabRooms(taskId || undefined);
+      const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
+      setCollabRooms(rooms);
+      setSelectedRoomId((prev) => (prev && rooms.some((room) => room.room_id === prev) ? prev : rooms[0]?.room_id ?? null));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setCollabRooms([]);
+      setSelectedRoomId(null);
+    } finally {
+      setCollabLoading(false);
+    }
+  }, [client]);
+
+  const loadCollabMessages = React.useCallback(async (roomId: string | null) => {
+    if (!roomId) {
+      setCollabMessages([]);
+      return;
+    }
+    setCollabLoading(true);
+    try {
+      const data = await client.listCollabMessages(roomId);
+      setCollabMessages(Array.isArray(data?.messages) ? data.messages : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setCollabMessages([]);
+    } finally {
+      setCollabLoading(false);
+    }
+  }, [client]);
+
+  React.useEffect(() => {
+    void loadCollabRooms(selectedTaskId);
+  }, [loadCollabRooms, selectedTaskId]);
+
+  React.useEffect(() => {
+    void loadCollabMessages(selectedRoomId);
+  }, [loadCollabMessages, selectedRoomId]);
+
+  const loadRoomOverview = React.useCallback(async (roomId: string | null) => {
+    if (!roomId) {
+      setRoomOverview(null);
+      return;
+    }
+    try {
+      setRoomOverview(await client.getRoomOverview(roomId));
+    } catch (err) {
+      setRoomOverview(null);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [client]);
+
+  React.useEffect(() => {
+    void loadRoomOverview(selectedRoomId);
+  }, [loadRoomOverview, selectedRoomId]);
 
   const loadTaskDetail = React.useCallback(async (taskId: string) => {
     setDetailLoading(true);
@@ -147,7 +243,7 @@ export default function GAGoDashboard(): React.ReactNode {
       setSelectedResult(result);
       setSelectedTaskId(taskId);
       // Fetch evidence file contents (best-effort, non-blocking on failure)
-      fetch(`/api/gago/tasks/${encodeURIComponent(taskId)}/evidence`, { credentials: "include" })
+      fetch(`/api/hub/tasks/${encodeURIComponent(taskId)}/evidence`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : { files: [] }))
         .then((data: { files?: { name: string; path: string; content: string; size: number }[] }) => {
           setEvidenceFiles(Array.isArray(data?.files) ? data.files : []);
@@ -178,7 +274,7 @@ export default function GAGoDashboard(): React.ReactNode {
               source: l.source || undefined,
             };
           }
-          // Handle file-based logs {path, content} from GA-Go backend
+          // Handle file-based logs {path, content} from GA-Claw Hub responses
           let ts = '';
           let message = l.content || '';
           let level = 'info';
@@ -279,6 +375,44 @@ export default function GAGoDashboard(): React.ReactNode {
     setSelectedTaskId(response.task.task_id);
   }
 
+  async function sendCollabInstruction() {
+    if (!selectedRoomId || !collabDraft.trim()) return;
+    const content = collabDraft.trim();
+    const type = roomCommandDraft.trim() || "comment.add";
+    setCollabDraft("");
+    if (type === "comment.add" || type === "comment") {
+      await client.sendRoomCommand(selectedRoomId, {
+        type: "comment.add",
+        text: content,
+        actor: "human",
+      });
+    } else if (type === "task.cancel") {
+      await client.sendRoomCommand(selectedRoomId, {
+        type: "task.cancel",
+        task_id: content,
+        reason: "canceled from Room Workbench v2",
+        actor: "human",
+      });
+    } else if (type === "worker.nudge") {
+      await client.sendRoomCommand(selectedRoomId, {
+        type: "worker.nudge",
+        worker_id: content,
+        actor: "human",
+      });
+    } else {
+      await client.sendRoomCommand(selectedRoomId, {
+        type,
+        input: content,
+        text: content,
+        actor: "human",
+      });
+    }
+    await Promise.all([loadCollabMessages(selectedRoomId), loadRoomOverview(selectedRoomId)]);
+    setNotice("Room Workbench v2 command sent");
+  }
+
+  const selectedRoom = collabRooms.find((room) => room.room_id === selectedRoomId) ?? null;
+
   const canCancel = selectedStatus ? ![TaskState.DONE, TaskState.FAILED, TaskState.CANCELED].includes(selectedStatus.state) : false;
 
   const runningCount = tasks.filter((item) => [TaskState.DISPATCHED, TaskState.RUNNING, TaskState.VERIFYING].includes(item.status.state)).length;
@@ -292,25 +426,25 @@ export default function GAGoDashboard(): React.ReactNode {
         <div className="mx-auto flex max-w-7xl flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-cyan-100">
-              <ShieldCheck className="size-3.5" /> GA-Go Control Plane UI
+              <ShieldCheck className="size-3.5" /> GA-Claw Workbench
             </div>
-            <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">GA-Go 集群控制台</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">基于 agent-chat-ui 二开，已接入 GA-Go HTTP API：节点、任务、配对、指标、任务提交和取消/重试操作。</p>
+            <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">GA-Claw 协作工作台</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">基于 agent-chat-ui 二开，正在收敛为 Room / Task / Approval / Workspace / Artifact / Tool / Node / Timeline 的统一协作入口。</p>
           </div>
           <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur md:grid-cols-[minmax(260px,1fr)_180px_auto]">
-            <Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} className="border-white/20 bg-white/10 text-white placeholder:text-slate-400" placeholder="GA-Go API Base URL" />
+            <Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} className="border-white/20 bg-white/10 text-white placeholder:text-slate-400" placeholder="GA-Claw API Base URL" />
             <Input value={token} onChange={(event) => setToken(event.target.value)} className="border-white/20 bg-white/10 text-white placeholder:text-slate-400" placeholder="Bearer token (optional)" type="password" />
-            <div className="flex gap-2"><Button asChild variant="secondary"><Link href="/tools">工具调试</Link></Button><Button asChild variant="secondary"><Link href="/workers">Worker监控</Link></Button><Button asChild variant="secondary"><Link href="/services">服务管理</Link></Button><Button asChild variant="secondary"><Link href="/templates">工作台</Link></Button><Button asChild variant="secondary"><Link href="/settings">设置</Link></Button><Button onClick={() => void refresh()} disabled={loading} variant="secondary"><RefreshCw className={loading ? "animate-spin" : ""} />刷新</Button></div>
+            <div className="flex flex-wrap gap-2"><Button asChild variant="secondary"><Link href="#rooms">Rooms</Link></Button><Button asChild variant="secondary"><Link href="#approvals">Approvals</Link></Button><Button asChild variant="secondary"><Link href="#workspaces">Workspaces</Link></Button><Button asChild variant="secondary"><Link href="#artifacts">Artifacts</Link></Button><Button asChild variant="secondary"><Link href="/tools">Tools</Link></Button><Button asChild variant="secondary"><Link href="/workers">Workers</Link></Button><Button asChild variant="secondary"><Link href="/services">Services</Link></Button><Button asChild variant="secondary"><Link href="/templates">Templates</Link></Button><Button asChild variant="secondary"><Link href="/settings">Settings</Link></Button><Button onClick={() => void refresh()} disabled={loading} variant="secondary"><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button></div>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-6 py-6 md:grid-cols-2 xl:grid-cols-5">
+      <section id="workbench-summary" className="mx-auto grid max-w-7xl gap-5 px-6 py-6 md:grid-cols-2 xl:grid-cols-5">
         <StatCard icon={Server} label="Nodes" value={nodes.length} hint={`${nodes.filter((node) => node.state !== NodeState.OFFLINE).length} online/registered`} />
         <StatCard icon={Activity} label="Active tasks" value={runningCount} hint={`${tasks.length} total tasks`} />
         <StatCard icon={CheckCircle2} label="Done" value={doneCount} hint={`${failedCount} failed`} />
-        <StatCard icon={GitPullRequestArrow} label="Pairings" value={pairings.length} hint={`${pendingPairings} pending`} />
-        <StatCard icon={CircleDashed} label="Services" value={services.filter((service) => service.state === "running").length} hint={`${services.length} registered`} />
+        <StatCard icon={GitPullRequestArrow} label="Approvals" value={approvals.length} hint={`${approvals.filter((a) => a.status === 'pending').length} pending`} />
+        <StatCard icon={CircleDashed} label="Artifacts" value={artifacts.length} hint={`${workspaces.length} workspaces · ${toolLeases.length} tool leases`} />
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-6 px-6 pb-10 xl:grid-cols-[1.1fr_0.9fr]">
@@ -319,34 +453,88 @@ export default function GAGoDashboard(): React.ReactNode {
             <div className={`rounded-xl border px-4 py-3 text-sm ${error ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{error || notice}</div>
           )}
 
-          <Card>
+          <Card id="rooms">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Bot className="size-5" /> 提交任务</CardTitle>
-              <CardDescription>调用 POST /tasks/submit 创建 GA-Go 任务，可附带 JSON inputs。</CardDescription>
+              <CardTitle className="flex items-center gap-2"><MessageSquare className="size-5" /> Rooms</CardTitle>
+              <CardDescription>协作空间与消息入口。</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3">
+            <CardContent className="space-y-3">
               <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-                <Input value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} placeholder="Task title" />
-                <Input value={newTaskType} onChange={(event) => setNewTaskType(event.target.value)} placeholder="type" />
+                <Input value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} placeholder="Room / Task title" />
+                <Input value={newTaskType} onChange={(event) => setNewTaskType(event.target.value)} placeholder="task type" />
               </div>
-              <Textarea value={newTaskInputs} onChange={(event) => setNewTaskInputs(event.target.value)} className="min-h-28 font-mono text-xs" />
+              <Textarea value={newTaskInputs} onChange={(event) => setNewTaskInputs(event.target.value)} className="min-h-28 font-mono text-xs" placeholder="Room command / task inputs JSON" />
               <div className="flex flex-wrap gap-2">
                 <Button onClick={() => void runAction("submit task", submitNewTask)} disabled={loading}><Play />提交任务</Button>
-                <Input value={nodeId} onChange={(event) => setNodeId(event.target.value)} className="max-w-52" placeholder="node id" />
+                <Input value={nodeId} onChange={(event) => setNodeId(event.target.value)} className="max-w-52" placeholder="worker/node id" />
                 <Button variant="outline" onClick={() => void runAction("register node", () => client.registerNode({ node_id: nodeId, cluster_role: "ga_worker", endpoint: `local://${nodeId}` }))} disabled={loading}>注册节点</Button>
                 <Button variant="outline" onClick={() => void runAction("claim task", () => client.claimTask({ node_id: nodeId }))} disabled={loading}>领取任务</Button>
               </div>
             </CardContent>
           </Card>
 
+          <Card id="approvals">
+            <CardHeader>
+              <CardTitle>Approvals</CardTitle>
+              <CardDescription>待审批、已审批、已拒绝项。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {approvals.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">暂无审批项</div> : approvals.map((item) => (
+                <div key={item.approval_id} className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{item.title}</span><Badge tone={item.status === 'pending' ? 'border-amber-300 bg-amber-50 text-amber-700' : item.status === 'approved' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'}>{item.status}</Badge></div>
+                      <div className="mt-1 text-xs text-muted-foreground">{item.approval_id} · task {item.task_id || '-'} · room {item.room_id || '-'}</div>
+                      {item.reason && <div className="mt-2 text-sm text-slate-600">{item.reason}</div>}
+                    </div>
+                    {item.status === 'pending' && <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => void runAction('approve approval', () => client.decideApproval(item.approval_id, 'approve'))}>批准</Button><Button size="sm" variant="outline" onClick={() => void runAction('reject approval', () => client.decideApproval(item.approval_id, 'reject', 'rejected from UI'))}>拒绝</Button></div>}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card id="workspaces">
+            <CardHeader>
+              <CardTitle>Workspaces</CardTitle>
+              <CardDescription>任务产出工作区。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {workspaces.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">暂无 workspace</div> : workspaces.map((ws) => (
+                <div key={ws.workspace_id} className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div><div className="font-semibold">{ws.name}</div><div className="text-xs text-muted-foreground">{ws.workspace_id} · {ws.path}</div></div>
+                    <Badge tone={ws.status === 'active' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-50 text-slate-700'}>{ws.status}</Badge>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card id="artifacts">
+            <CardHeader>
+              <CardTitle>Artifacts</CardTitle>
+              <CardDescription>导入、产物、证据文件。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {artifacts.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">暂无 artifact</div> : artifacts.map((artifact) => (
+                <div key={artifact.artifact_id} className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div><div className="font-semibold">{artifact.name}</div><div className="text-xs text-muted-foreground">{artifact.path} · {artifact.size} bytes</div></div>
+                    <Badge>{artifact.workspace_id || artifact.room_id || artifact.task_id || 'orphan'}</Badge>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Server className="size-5" /> 本机服务</CardTitle>
-              <CardDescription>GET /services 状态展示；支持 start/stop/restart 和错误日志 tail。</CardDescription>
+              <CardTitle className="flex items-center gap-2"><Server className="size-5" /> GA-Claw Service Ops</CardTitle>
+              <CardDescription>Room / Timeline / Approval / Workspace 背后的运行服务视图；支持 start/stop/restart 和错误日志 tail。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {services.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">暂无服务配置；后端会在 .ga-go/services.json 生成默认白名单</div> : services.map((service) => (
+              {services.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">暂无 GA-Claw 服务配置；Hub 会生成默认运维白名单</div> : services.map((service) => (
                 <div key={service.id} className="rounded-xl border bg-white p-4 shadow-sm">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
@@ -369,11 +557,10 @@ export default function GAGoDashboard(): React.ReactNode {
 
           <Card>
             <CardHeader>
-              <CardTitle>任务队列</CardTitle>
-              <CardDescription>GET /tasks；支持取消、重试、重跑、分配给当前 node id。</CardDescription>
+              <CardTitle>GA-Claw Task Queue</CardTitle>
+              <CardDescription>Room / Timeline / Approval / Workspace 驱动的任务队列；支持取消、重试、重跑、分配给当前 node id。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* 筛选栏 */}
               <div className="flex flex-wrap items-center gap-2">
                 <select className="rounded-md border px-2 py-1 text-sm" value={taskFilterState} onChange={(e) => setTaskFilterState(e.target.value)}>
                   <option value="">全部状态</option>
@@ -477,8 +664,70 @@ export default function GAGoDashboard(): React.ReactNode {
 
           <Card>
             <CardHeader>
+              <CardTitle className="flex items-center gap-2"><MessageSquare className="size-5" /> 协作指挥室 · Room Workbench v2</CardTitle>
+              <CardDescription>Human-in-the-loop：GET /rooms/{'{id}'}/overview 聚合任务、审批、产物、工具调用、节点与事件；POST /rooms/{'{id}'}/commands 支持 comment.add / task.cancel / worker.nudge。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => void loadCollabRooms(selectedTaskId)} disabled={collabLoading}>刷新房间</Button>
+                <Button size="sm" variant="outline" onClick={() => selectedRoomId && void client.getRoomOverview(selectedRoomId).then(setRoomOverview)} disabled={!selectedRoomId || collabLoading}>刷新 overview</Button>
+                {selectedRoom && <Badge>{selectedRoom.status || "room"}</Badge>}
+                {roomOverview && <Badge>{roomOverview.task_count} tasks</Badge>}
+                {roomOverview && <Badge>{roomOverview.approvals.length} approvals</Badge>}
+                {roomOverview && <Badge>{roomOverview.artifact_count} artifacts</Badge>}
+                {roomOverview && <Badge>{roomOverview.tool_invocations.length} tool calls</Badge>}
+                {roomOverview && <Badge>{roomOverview.active_nodes} active nodes</Badge>}
+                {collabLoading && <Badge>loading</Badge>}
+              </div>
+              <select
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={selectedRoomId ?? ""}
+                onChange={(event) => setSelectedRoomId(event.target.value || null)}
+              >
+                <option value="">未选择 room</option>
+                {collabRooms.map((room) => (
+                  <option key={room.room_id} value={room.room_id}>{room.title || room.room_id}</option>
+                ))}
+              </select>
+              <div className="max-h-80 space-y-2 overflow-auto rounded-lg border bg-slate-50 p-3">
+                {collabMessages.length === 0 ? (
+                  <div className="text-center text-xs text-muted-foreground">暂无协作消息</div>
+                ) : collabMessages.map((message) => (
+                  <div key={message.message_id} className="rounded-md bg-white p-3 text-sm shadow-sm">
+                    <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <Badge>{message.author}</Badge>
+                      <span>{message.created_at || ""}</span>
+                    </div>
+                    <div className="whitespace-pre-wrap text-slate-800">{message.content}</div>
+                  </div>
+                ))}
+              </div>
+              <select
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={roomCommandDraft}
+                onChange={(event) => setRoomCommandDraft(event.target.value)}
+              >
+                <option value="comment.add">comment.add</option>
+                <option value="task.cancel">task.cancel</option>
+                <option value="worker.nudge">worker.nudge</option>
+                <option value="task.create">task.create</option>
+              </select>
+              <textarea
+                className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                placeholder="例如：@worker 请优先验证第 2 个证据源；或：暂停当前方向，改为搜索官方公告。"
+                value={collabDraft}
+                onChange={(event) => setCollabDraft(event.target.value)}
+              />
+              <Button className="w-full" onClick={() => void sendCollabInstruction()} disabled={!selectedRoomId || !collabDraft.trim() || collabLoading}>
+                <Send className="size-4" />发送介入指令
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle className="flex items-center gap-2"><CircleDashed className="size-5" /> 服务状态</CardTitle>
-              <CardDescription>{health ? `${health.service} ${health.version} · ${health.time}` : "Waiting for /health"}</CardDescription>
+              <CardDescription>{formatHealthDescription(health)}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3"><span className="text-sm text-muted-foreground">API</span><Badge tone={health?.ok ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-amber-300 bg-amber-50 text-amber-700"}>{health?.ok ? "healthy" : "unknown"}</Badge></div>

@@ -9,14 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createGAGoClient } from "@/lib/gago-client";
-import type { ToolInfo, ToolSchema, ToolSchemaParam, ToolRunResult } from "@/lib/gago-types";
+import { createGaClawClient } from "@/lib/hub-client";
+import type { ToolInfo, ToolSchema, ToolSchemaParam, ToolRunResult } from "@/lib/hub-types";
 
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_GAGO_API_BASE_URL || "http://127.0.0.1:8765";
 const DEFAULT_TOKEN = process.env.NEXT_PUBLIC_GAGO_AUTH_TOKEN || "";
 
 export default function ToolsLabPage() {
-  const client = React.useMemo(() => createGAGoClient({ baseUrl: DEFAULT_BASE_URL, token: DEFAULT_TOKEN || null }), []);
+  const client = React.useMemo(() => createGaClawClient({ baseUrl: DEFAULT_BASE_URL, token: DEFAULT_TOKEN || null }), []);
 
   // Tool list state
   const [tools, setTools] = React.useState<ToolInfo[]>([]);
@@ -50,9 +50,9 @@ export default function ToolsLabPage() {
       setTools(Array.isArray(list) ? list : []);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      // 404 means backend hasn't implemented /tools yet — show friendly message
+      // 404 means the Hub tool gateway has not exposed /tools yet — show friendly message
       if (msg.includes("404") || msg.includes("Not Found")) {
-        setToolsError("工具服务尚未启用 — GA-Go 后端暂未注册 /tools 端点。请升级后端或手动注册工具。");
+        setToolsError("工具服务尚未启用 — Hub 工具网关暂未注册 /tools 端点。请启用 GA-Claw tool lease gateway 或手动注册工具。");
       } else {
         setToolsError(msg);
       }
@@ -212,8 +212,8 @@ export default function ToolsLabPage() {
         </Link>
         <Wrench className="size-6 text-primary" />
         <div>
-          <h1 className="text-2xl font-bold">工具实验室</h1>
-          <p className="text-sm text-muted-foreground">自动发现、配置、执行 GA-Go 工具</p>
+          <h1 className="text-2xl font-bold">GA-Claw Tool Leases</h1>
+          <p className="text-sm text-muted-foreground">工具租约 / Hub 工具网关 / 调用 / 结果历史</p>
         </div>
         <Button variant="outline" size="sm" className="ml-auto" onClick={loadTools} disabled={toolsLoading}>
           <RefreshCw className={`mr-1 size-3 ${toolsLoading ? 'animate-spin' : ''}`} /> 刷新
@@ -236,7 +236,7 @@ export default function ToolsLabPage() {
             )}
             {toolsLoading && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />加载中...</div>}
             {!toolsLoading && tools.length === 0 && !toolsError && (
-              <div className="text-center text-sm text-muted-foreground py-8">暂无工具<br /><span className="text-xs">确保 GA-Go 后端已启动</span></div>
+              <div className="text-center text-sm text-muted-foreground py-8">暂无工具<br /><span className="text-xs">确保 GA-Claw Hub 工具网关已启动</span></div>
             )}
             {tools.map(t => (
               <button

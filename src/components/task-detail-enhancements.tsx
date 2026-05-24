@@ -233,8 +233,8 @@ export function ResultPreviewCard({ task, status, result }: { task: Task | null;
       <CardContent className="space-y-4">
         {/* Status badges */}
         <div className="flex flex-wrap gap-2">
-          <MiniBadge tone={badgeTone(status?.state)}>{status?.state || "NO_STATUS"}</MiniBadge>
-          <MiniBadge tone={badgeTone(result?.verdict)}>{result?.verdict || "NO_VERDICT"}</MiniBadge>
+          <MiniBadge tone={badgeTone(status?.state)}>{status?.state || "等待状态"}</MiniBadge>
+          <MiniBadge tone={badgeTone(result?.verdict)}>{result?.verdict || "等待结果"}</MiniBadge>
           {status?.node_id && <MiniBadge>{status.node_id}</MiniBadge>}
           {status?.run_id && <MiniBadge>run {status.run_id}</MiniBadge>}
         </div>

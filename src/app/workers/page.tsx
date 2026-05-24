@@ -4,8 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { Activity, ArrowLeft, Clock3, Pause, Server, Trash2, Wifi, WifiOff } from "lucide-react";
 
-import { createGAGoClient } from "@/lib/gago-client";
-import { Node, NodeState } from "@/lib/gago-types";
+import { createGaClawClient } from "@/lib/hub-client";
+import { Node, NodeState } from "@/lib/hub-types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -37,7 +37,7 @@ export default function WorkersPage() {
 
   const client = React.useMemo(() => {
     const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-    return createGAGoClient({ baseUrl: params.get("api") || "/api/gago", token: params.get("token") });
+    return createGaClawClient({ baseUrl: params.get("api") || "/api/hub", token: params.get("token") });
   }, []);
 
   const refresh = React.useCallback(async () => {
@@ -96,7 +96,10 @@ export default function WorkersPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="text-muted-foreground hover:text-foreground"><ArrowLeft className="h-5 w-5" /></Link>
-            <h1 className="text-2xl font-bold">Worker 监控面板</h1>
+            <div>
+              <h1 className="text-2xl font-bold">GA-Claw Worker Nodes</h1>
+              <p className="text-sm text-muted-foreground">节点 / adapter / heartbeat / drain 视图</p>
+            </div>
           </div>
           <Button variant="outline" onClick={() => void refresh()} disabled={loading}>刷新</Button>
         </div>
