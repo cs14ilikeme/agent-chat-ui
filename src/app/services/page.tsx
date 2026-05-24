@@ -97,8 +97,8 @@ export default function ServicesPage() {
             <Button asChild variant="ghost" size="icon"><Link href="/"><ArrowLeft className="h-4 w-4" /></Link></Button>
             <Server className="h-6 w-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold">服务管理</h1>
-              <p className="text-sm text-muted-foreground">本机服务状态监控与控制</p>
+              <h1 className="text-2xl font-bold">GA-Claw Service Ops</h1>
+              <p className="text-sm text-muted-foreground">运行服务 / 重启 / 日志 / 健康视图</p>
             </div>
           </div>
           <Button onClick={() => void refresh()} disabled={loading} variant="outline" size="sm">

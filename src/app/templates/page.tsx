@@ -4,8 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, Layers, MessageSquare, Play, Plus, Search, Terminal, HeartPulse, Trash2, Upload } from "lucide-react";
 
-import { createGAGoClient } from "@/lib/gago-client";
-import { TaskTemplate, TemplateParam } from "@/lib/gago-types";
+import { createGaClawClient } from "@/lib/hub-client";
+import { TaskTemplate, TemplateParam } from "@/lib/hub-types";
 import { builtinTemplates } from "@/lib/templates";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 // Badge not available, using span instead
 
-const CUSTOM_TEMPLATES_KEY = "ga-go-custom-templates";
+const CUSTOM_TEMPLATES_KEY = "ga-claw-action-templates";
 
 const iconMap: Record<string, React.ReactNode> = {
   Search: <Search className="h-5 w-5" />,
@@ -86,7 +86,7 @@ export default function TemplatesPage() {
   const [importMsg, setImportMsg] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const client = React.useMemo(() => createGAGoClient({ baseUrl: "/api/gago" }), []);
+  const client = React.useMemo(() => createGaClawClient({ baseUrl: "/api/hub" }), []);
 
   React.useEffect(() => {
     setCustomTemplates(loadCustomTemplates());
@@ -146,7 +146,7 @@ export default function TemplatesPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ga-go-templates-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `ga-claw-templates-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setImportMsg("已导出模板文件");
@@ -252,8 +252,8 @@ export default function TemplatesPage() {
               <Link href="/"><ArrowLeft className="h-4 w-4" /></Link>
             </Button>
             <div>
-              <h1 className="text-2xl font-bold">工作台</h1>
-              <p className="text-sm text-muted-foreground">选择模板快速提交任务</p>
+              <h1 className="text-2xl font-bold">GA-Claw 协作动作模板</h1>
+              <p className="text-sm text-muted-foreground">面向 Room / Task / Approval / Workspace 的模板入口</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

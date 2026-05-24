@@ -1,7 +1,7 @@
 import { TaskTemplate } from './gago-types';
 
 /**
- * Built-in task templates for GA-Go Workbench.
+ * Built-in task templates for GA-Claw Workbench.
  * Each template defines parameters and a buildPayload function
  * that converts user input into a TaskSubmitPayload.
  */
@@ -50,6 +50,7 @@ export const builtinTemplates: TaskTemplate[] = [
         message: values.message,
         character: values.character || undefined,
         stream: values.stream ?? true,
+        action: `openai generate --prompt ${JSON.stringify(values.message || '')}`,
       },
     }),
   },

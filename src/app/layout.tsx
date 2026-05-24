@@ -12,8 +12,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "GA-Go Control Plane",
-  description: "Dashboard for GA-Go nodes, tasks, pairings and metrics",
+  title: "GA-Claw Workbench",
+  description: "GA-Claw 协作工作台 for rooms, approvals, workspaces and artifacts",
 };
 
 export default function RootLayout({

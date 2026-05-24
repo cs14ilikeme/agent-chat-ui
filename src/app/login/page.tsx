@@ -62,10 +62,10 @@ function LoginForm() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <Lock className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">GA-Go 控制台</CardTitle>
-          <CardDescription>
-            输入管理员凭据以访问控制台
-          </CardDescription>
+              <CardTitle className="text-2xl">GA-Claw 协作工作台</CardTitle>
+              <CardDescription>
+                输入管理员凭据以访问协作工作台
+              </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

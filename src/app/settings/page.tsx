@@ -8,7 +8,7 @@ import { ArrowLeft, Shield, Server, Key, RefreshCw, LogOut, LogIn } from "lucide
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
-import { createGAGoClient } from "@/lib/gago-client";
+import { createGaClawClient } from "@/lib/hub-client";
 
 interface SystemInfo {
   version: string;
@@ -28,8 +28,8 @@ export default function SettingsPage() {
     setLoading(true);
     setError("");
     try {
-      const client = createGAGoClient({
-        baseUrl: "/api/gago",
+      const client = createGaClawClient({
+        baseUrl: "/api/hub",
       });
       const health = await client.health();
       const tasks = await client.listTasks();
@@ -49,7 +49,7 @@ export default function SettingsPage() {
         servicesTotal: servicesCount,
       });
     } catch (err: any) {
-      setError(err.message || "无法连接到 GA-Go 服务");
+      setError(err.message || "无法连接到 GA-Claw Hub 服务");
     } finally {
       setLoading(false);
     }
@@ -68,7 +68,7 @@ export default function SettingsPage() {
             返回
           </Button>
         </Link>
-        <h1 className="text-2xl font-bold">设置 & 配置中心</h1>
+        <h1 className="text-2xl font-bold">GA-Claw 工作台设置 & 配置中心</h1>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -79,7 +79,7 @@ export default function SettingsPage() {
               <Shield className="h-5 w-5" />
               认证状态
             </CardTitle>
-            <CardDescription>当前登录信息与权限</CardDescription>
+            <CardDescription>GA-Claw 当前登录信息与权限</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between">
@@ -131,7 +131,7 @@ export default function SettingsPage() {
               <Server className="h-5 w-5" />
               系统信息
             </CardTitle>
-            <CardDescription>GA-Go 服务端状态</CardDescription>
+            <CardDescription>GA-Claw 服务端状态</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {loading ? (
@@ -176,11 +176,11 @@ export default function SettingsPage() {
               <Key className="h-5 w-5" />
               连接配置
             </CardTitle>
-            <CardDescription>API 端点与密钥状态（脱敏）</CardDescription>
+            <CardDescription>GA-Claw API 端点与密钥状态（脱敏）</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">API 地址</span>
+              <span className="text-sm text-muted-foreground">GA-Claw API 地址</span>
               <span className="text-sm font-mono">
                 {process.env.NEXT_PUBLIC_GAGO_API_BASE_URL || "http://127.0.0.1:8765"}
               </span>
@@ -203,7 +203,7 @@ export default function SettingsPage() {
               <Shield className="h-5 w-5" />
               安全建议
             </CardTitle>
-            <CardDescription>生产环境部署注意事项</CardDescription>
+            <CardDescription>GA-Claw 生产环境部署注意事项</CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2 text-sm text-muted-foreground">
